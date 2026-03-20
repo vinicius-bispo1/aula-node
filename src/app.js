@@ -14,12 +14,12 @@ app.get("/posts", async (req, res) => {
     const resultado = await pool.query(`
       SELECT 
         usuarios.nome,
-        posts.conteudo,
-        posts.criado_em
-      FROM posts
+        post.conteudo,
+        post.criado_em
+      FROM post
       JOIN usuarios 
-      ON posts.usuario_id = usuarios.id
-      ORDER BY posts.criado_em DESC
+      ON post.usuario_id = usuarios.id
+      ORDER BY post.criado_em DESC
     `);
     res.json(resultado.rows);
   } catch (erro) {
