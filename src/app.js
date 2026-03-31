@@ -1,5 +1,10 @@
+require("dotenv").config();
 const express = require("express");
 const pool = require("./config/db");
+const validarPost = require("./validacao/post");
+
+const auth = require("./auth/authLogin");
+const jwt = require("jsonwebtoken");
 
 const app = express();
 app.use(express.json());
@@ -57,9 +62,9 @@ app.get("/posts", async (req, res) => {
 });
 
 // CREATE POST
-app.post("/post", async (req, res) => {
+app.post("/post", auth, validarPost, async (req, res) => {
   try {
-    const { titulo, conteudo, usuario_id } = req.body;
+    const { titulo, conteudo } = req.body;
 
     const resultado = await pool.query(
       `
@@ -67,9 +72,9 @@ app.post("/post", async (req, res) => {
       VALUES ($1, $2, $3)
       RETURNING *
       `,
-      [titulo, conteudo, usuario_id],
+      [titulo, conteudo, req.usuario.id],
     );
-
+    console.log(resultado);
     const post = {
       ...resultado.rows[0],
       criado_em: formatarData(resultado.rows[0].criado_em),
@@ -106,6 +111,30 @@ app.delete("/posts/:id", async (req, res) => {
   await pool.query("DELETE FROM post WHERE id=$1", [id]);
 
   res.json({ message: "Post deletado" });
+});
+
+// Login
+app.post("/login", async (req, res) => {
+  const { email, senha } = req.body;
+
+  const usuario = await pool.query("SELECT * FROM usuarios WHERE email=$1", [
+    email,
+  ]);
+
+  if (usuario.rows.length === 0) {
+    return res.status(400).json({ message: "Usuário não encontrado" });
+  }
+
+  // ⚠️ (por enquanto sem bcrypt — aula 9)
+  if (senha !== usuario.rows[0].senha) {
+    return res.status(400).json({ message: "Senha inválida" });
+  }
+
+  const token = jwt.sign({ id: usuario.rows[0].id }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
+  console.log("LOGIN SECRET:", process.env.JWT_SECRET);
+  res.json({ token });
 });
 
 module.exports = app;
