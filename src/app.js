@@ -6,9 +6,11 @@ const validarPost = require("./validacao/post");
 const auth = require("./auth/authLogin");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+const cors = require("cors");
 
 const app = express();
 app.use(express.json());
+app.use(cors());
 
 // colocar no horario local
 function formatarData(data) {
