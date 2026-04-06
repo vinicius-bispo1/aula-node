@@ -7,6 +7,9 @@ const auth = (req, res, next) => {
   if (!token) {
     return res.status(401).json({ message: "Sem token" });
   }
+  //   if (!token || !token.startsWith("Bearer ")) {
+  //   return res.status(401).json({ message: "Token mal formatado" });
+  // }
 
   try {
     const decoded = jwt.verify(token.split(" ")[1], process.env.JWT_SECRET);
@@ -14,8 +17,6 @@ const auth = (req, res, next) => {
     req.usuario = decoded;
     console.log(req.usuario);
     next();
-    console.log("AUTH SECRET:", process.env.JWT_SECRET);
-    console.log("TOKEN:", token);
   } catch (erro) {
     console.log("ERRO JWT:", erro.message); // 👈 adiciona isso
     return res.status(401).json({ message: "Token inválido" });

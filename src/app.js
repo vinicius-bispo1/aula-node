@@ -5,6 +5,7 @@ const validarPost = require("./validacao/post");
 
 const auth = require("./auth/authLogin");
 const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
 
 const app = express();
 app.use(express.json());
@@ -33,6 +34,60 @@ app.get("/", (req, res) => {
 //     res.status(500).json({ erro: "Erro ao buscar postagens" });
 //   }
 // });
+
+app.post("/usuarios", async (req, res) => {
+  try {
+    const { nome, email, senha } = req.body;
+
+    const senhaHash = await bcrypt.hash(senha, 10); // incluido
+
+    const resultado = await pool.query(
+      `
+      INSERT INTO usuarios (nome, email, senha)
+      VALUES ($1, $2, $3)
+      RETURNING *
+    `,
+      [nome, email, senhaHash], //alteração aqui
+    );
+    res.status(201).json({
+      mensagem: "Usuário criado com sucesso",
+      usuario: resultado.rows[0],
+    });
+  } catch (erro) {
+    res.status(500).json({
+      erro: "Erro ao criar usuário",
+    });
+  }
+});
+
+// Login
+app.post("/login", async (req, res) => {
+  const { email, senha } = req.body;
+
+  const usuario = await pool.query("SELECT * FROM usuarios WHERE email=$1", [
+    email,
+  ]);
+
+  if (usuario.rows.length === 0) {
+    return res.status(400).json({ message: "Usuário não encontrado" });
+  }
+
+  //alteração aqui
+  const senhaValida = await bcrypt.compare(senha, usuario.rows[0].senha);
+
+  if (!senhaValida) {
+    return res.status(400).json({
+      mensagem: "Senha inválida",
+    });
+  }
+
+  const token = jwt.sign({ id: usuario.rows[0].id }, process.env.JWT_SECRET, {
+    expiresIn: "1h",
+  });
+  // remover antes de subir
+  console.log("LOGIN SECRET:", process.env.JWT_SECRET);
+  res.json({ token });
+});
 
 // GET POSTS
 app.get("/posts", async (req, res) => {
@@ -92,49 +147,71 @@ app.post("/post", auth, validarPost, async (req, res) => {
 });
 
 // UPDATE POST
-app.put("/posts/:id", async (req, res) => {
-  const { id } = req.params;
-  const { titulo, conteudo } = req.body;
+app.put("/posts/:id", auth, validarPost, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { titulo, conteudo } = req.body;
 
-  const resultado = await pool.query(
-    "UPDATE post SET titulo=$1, conteudo=$2 WHERE id=$3 RETURNING *",
-    [titulo, conteudo, id],
-  );
+    // 🔍 Busca o post
+    const post = await pool.query("SELECT * FROM post WHERE id=$1", [id]);
 
-  res.json(resultado.rows[0]);
+    // ❌ Post não existe
+    if (post.rows.length === 0) {
+      return res.status(404).json({ mensagem: "Post não encontrado" });
+    }
+
+    // ❌ Usuário não é dono
+    if (post.rows[0].usuario_id !== req.usuario.id) {
+      return res.status(403).json({ mensagem: "Sem permissão" });
+    }
+
+    // ✅ Atualiza
+    const resultado = await pool.query(
+      `UPDATE post SET titulo=$1, conteudo=$2 WHERE id=$3 RETURNING *`,
+      [titulo, conteudo, id],
+    );
+
+    res.status(200).json({
+      mensagem: "Post atualizado com sucesso",
+      post: resultado.rows[0],
+    });
+  } catch (erro) {
+    res.status(500).json({
+      erro: "Erro ao atualizar post",
+    });
+  }
 });
 
-// DELETE POST
-app.delete("/posts/:id", async (req, res) => {
-  const { id } = req.params;
+// Rota delete:
 
-  await pool.query("DELETE FROM post WHERE id=$1", [id]);
+app.delete("/posts/:id", auth, async (req, res) => {
+  try {
+    const { id } = req.params;
 
-  res.json({ message: "Post deletado" });
-});
+    const post = await pool.query("SELECT * FROM post WHERE id=$1", [id]);
 
-// Login
-app.post("/login", async (req, res) => {
-  const { email, senha } = req.body;
+    if (post.rows.length === 0) {
+      return res.status(404).json({ mensagem: "Post não encontrado" });
+    }
 
-  const usuario = await pool.query("SELECT * FROM usuarios WHERE email=$1", [
-    email,
-  ]);
+    if (post.rows[0].usuario_id !== req.usuario.id) {
+      return res.status(403).json({ mensagem: "Sem permissão" });
+    }
 
-  if (usuario.rows.length === 0) {
-    return res.status(400).json({ message: "Usuário não encontrado" });
+    const resultado = await pool.query(
+      `DELETE FROM post WHERE id=$1 RETURNING *`,
+      [id],
+    );
+
+    res.json({
+      mensagem: "Post deletado com sucesso",
+      post: resultado.rows[0],
+    });
+  } catch (erro) {
+    res.status(500).json({
+      erro: "Erro ao deletar post",
+    });
   }
-
-  // ⚠️ (por enquanto sem bcrypt — aula 9)
-  if (senha !== usuario.rows[0].senha) {
-    return res.status(400).json({ message: "Senha inválida" });
-  }
-
-  const token = jwt.sign({ id: usuario.rows[0].id }, process.env.JWT_SECRET, {
-    expiresIn: "1h",
-  });
-  console.log("LOGIN SECRET:", process.env.JWT_SECRET);
-  res.json({ token });
 });
 
 module.exports = app;
