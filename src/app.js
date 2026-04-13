@@ -78,16 +78,17 @@ app.get("/", (req, res) => {
 app.get("/usuarios", async (req, res) => {
   try {
     const resultado = await pool.query(`
-      SELECT nome, email FROM usuarios;
+      SELECT nome, email, criado_em FROM usuarios;
     `);
-    const dados = resultado.rows.map((post) => ({
-      ...post,
-      criado_em: formatarData(post.criado_em),
+
+    const dados = resultado.rows.map((usuario) => ({
+      ...usuario,
+      criado_em: formatarData(usuario.criado_em),
     }));
 
     res.json(dados);
   } catch (erro) {
-    res.status(500).json({ erro: "Erro ao buscar postagens" });
+    res.status(500).json({ erro: "Erro ao buscar usuários" });
   }
 });
 
