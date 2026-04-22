@@ -1,12 +1,15 @@
 require("dotenv").config();
 const express = require("express");
 const pool = require("./config/db");
-const validarPost = require("./validacao/post");
-const validarUsuarios = require("./validacao/usuarios");
-const jwt = require("jsonwebtoken");
-const auth = require("./auth/authLogin");
-const bcrypt = require("bcrypt");
+const validarPost = require("./middlewares/validacao/post");
+// const validarUsuarios = require("./validacao/usuarios");
+// const jwt = require("jsonwebtoken");
+// const auth = require("./auth/authLogin");
+// const bcrypt = require("bcrypt");
 const cors = require("cors");
+
+const authRoutes = require("./routes/authRoutes");
+const usuarioRoutes = require("./routes/usuarioRoutes");
 
 const app = express();
 app.use(express.json());
@@ -18,57 +21,60 @@ function formatarData(data) {
   });
 }
 
+app.use(authRoutes);
+app.use(usuarioRoutes);
+
 // Cadastro
-app.post("/usuarios", validarUsuarios, async (req, res) => {
-  try {
-    const { nome, email, senha } = req.body;
+// app.post("/usuarios", validarUsuarios, async (req, res) => {
+//   try {
+//     const { nome, email, senha } = req.body;
 
-    const senhaHash = await bcrypt.hash(senha, 10);
+//     const senhaHash = await bcrypt.hash(senha, 10);
 
-    const resultado = await pool.query(
-      `
-      INSERT INTO usuarios (nome, email, senha)
-      VALUES ($1, $2, $3)
-    `,
-      [nome, email, senhaHash],
-    );
-    res.status(201).json({
-      mensagem: "Usuário criado com sucesso",
-      usuario: resultado.rows[0],
-    });
-  } catch (erro) {
-    res.status(500).json({
-      erro: "Erro ao criar usuário",
-    });
-  }
-});
+//     const resultado = await pool.query(
+//       `
+//       INSERT INTO usuarios (nome, email, senha)
+//       VALUES ($1, $2, $3)
+//     `,
+//       [nome, email, senhaHash],
+//     );
+//     res.status(201).json({
+//       mensagem: "Usuário criado com sucesso",
+//       usuario: resultado.rows[0],
+//     });
+//   } catch (erro) {
+//     res.status(500).json({
+//       erro: "Erro ao criar usuário",
+//     });
+//   }
+// });
 
 // Login
-app.post("/login", async (req, res) => {
-  const { email, senha } = req.body;
+// app.post("/login", async (req, res) => {
+//   const { email, senha } = req.body;
 
-  const usuario = await pool.query(
-    `
-      SELECT * FROM usuarios WHERE email=$1`,
-    [email],
-  );
+//   const usuario = await pool.query(
+//     `
+//       SELECT * FROM usuarios WHERE email=$1`,
+//     [email],
+//   );
 
-  if (usuario.rows.length === 0) {
-    return res.status(400).json({ mensagem: "Credenciais inválidas" });
-  }
+//   if (usuario.rows.length === 0) {
+//     return res.status(400).json({ mensagem: "Credenciais inválidas" });
+//   }
 
-  const senhaValida = await bcrypt.compare(senha, usuario.rows[0].senha);
+//   const senhaValida = await bcrypt.compare(senha, usuario.rows[0].senha);
 
-  if (!senhaValida) {
-    return res.status(400).json({ mensagem: "Credenciais inválidas" });
-  }
+//   if (!senhaValida) {
+//     return res.status(400).json({ mensagem: "Credenciais inválidas" });
+//   }
 
-  const token = jwt.sign({ id: usuario.rows[0].id }, process.env.JWT_SECRET, {
-    expiresIn: "1h",
-  });
+//   const token = jwt.sign({ id: usuario.rows[0].id }, process.env.JWT_SECRET, {
+//     expiresIn: "1h",
+//   });
 
-  res.json({ token });
-});
+//   res.json({ token });
+// });
 
 app.get("/", (req, res) => {
   res.send("<h1>Rede Social!</h1>");
@@ -121,7 +127,7 @@ app.get("/posts", async (req, res) => {
 });
 
 // Criando a Rota POST
-app.post("/posts", auth, validarPost, async (req, res) => {
+app.post("/posts", validarPost, async (req, res) => {
   try {
     const { titulo, conteudo } = req.body;
     const resultado = await pool.query(
@@ -145,7 +151,7 @@ app.post("/posts", auth, validarPost, async (req, res) => {
 
 //  Criado rota PUT - Atualização
 
-app.put("/posts/:id", auth, validarPost, async (req, res) => {
+app.put("/posts/:id", validarPost, async (req, res) => {
   try {
     const { id } = req.params;
     const { titulo, conteudo } = req.body;
@@ -176,7 +182,7 @@ app.put("/posts/:id", auth, validarPost, async (req, res) => {
 });
 
 // ROTA DELETE
-app.delete("/posts/:id", auth, async (req, res) => {
+app.delete("/posts/:id", async (req, res) => {
   try {
     const { id } = req.params;
 
